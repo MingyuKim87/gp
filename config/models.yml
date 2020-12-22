@@ -1,0 +1,91 @@
+Base:
+  INPUT_DIM : 1
+  OUTPUT_DIM : 1
+  NUM_CONTEXT_POINTS: 15
+  NUM_EXTRA_TARGET_POINTS: 5
+  TASK_SIZE: 2
+  NUM_POINTS: 100
+  
+CNP:
+  # Model
+  HIDDEN_SIZE: 128
+  NUM_LATENT: 128
+  DEBUG: True
+
+  # Set training parameters
+  PLOT_AFTER: 11
+  LEARNING_RATE: 1.0e-3
+
+NP:
+  # Model
+  HIDDEN_SIZE: 128
+  NUM_LATENT: 128
+  DEBUG: True
+
+  # Set training parameters
+  PLOT_AFTER: 11
+  LEARNING_RATE: 1.0e-3
+
+ANP:
+  # Model
+  HIDDEN_SIZE: 128
+  NUM_LATENT: 128
+  DEBUG: True
+
+  # Attention type : multihead, soft_attention
+  ATTENTION_TYPE: 'multihead'
+
+  # Set training parameters
+  PLOT_AFTER: 11
+  LEARNING_RATE: 1.0e-3
+
+ANP_log_normal:
+    # Model
+  HIDDEN_SIZE: 128
+  NUM_LATENT: 128
+  DEBUG: True
+
+  # Attention type : multihead, soft_attention
+  ATTENTION_TYPE: 'soft_attention'
+
+  # if soft_attention (Bayesian attention)
+    # option : contextual or else
+  PRIOR_TYPE : "contextual"
+    # option : weibull or log_normal
+  VARIATION_TYPE : "log_normal"
+
+  # Set training parameters
+  PLOT_AFTER: 11
+  LEARNING_RATE: 1.0e-3
+
+ANP_weibull:
+    # Model
+  HIDDEN_SIZE: 128
+  NUM_LATENT: 128
+  DEBUG: True
+
+  # Attention type : multihead, soft_attention
+  ATTENTION_TYPE: 'soft_attention'
+
+  # if soft_attention (Bayesian attention)
+    # option : contextual or else
+  PRIOR_TYPE : "contextual"
+    # option : weibull or log_normal
+  VARIATION_TYPE : "weibull"
+
+  # Set training parameters
+  PLOT_AFTER: 11
+  LEARNING_RATE: 1.0e-3
+
+ANP_variational:
+  # Model
+  HIDDEN_SIZE: 128
+  NUM_LATENT: 128
+  DEBUG: True
+
+  # Attention type : multihead
+  ATTENTION_TYPE: 'multihead'
+
+  # Set training parameters
+  PLOT_AFTER: 11
+  LEARNING_RATE: 1.0e-3
