@@ -62,7 +62,7 @@ class CNP(abstract_NPs):
             self.train(False)
     
         # Representation value
-        rep = self._deterministic_encoder(context_x, context_y)
+        rep, weights = self._deterministic_encoder(context_x, context_y)
 
         # 뻥튀기
         rep = torch.unsqueeze(rep, dim=1).repeat(1, num_total_points, 1)  #[batch_size, the number of points, latent_dim]
@@ -73,4 +73,4 @@ class CNP(abstract_NPs):
         # Distribution
         p_y_pred = torch.distributions.Normal(mu, sigma)
 
-        return p_y_pred, None, None
+        return p_y_pred, None, None, None, rep

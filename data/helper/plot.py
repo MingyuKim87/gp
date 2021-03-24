@@ -28,7 +28,7 @@ def plot_test(context_x, context_y, target_x, target_y):
     #plt.xlabel("{} iterations".format(iteration))
     plt.yticks([-2, 0, 2], fontsize=16)
     plt.xticks([-4, 0, 4], fontsize=16)
-    plt.ylim([-1, 1])
+    #plt.ylim([-1, 1])
     plt.grid(False)
     ax = plt.gca()
     ax.set_facecolor('white')

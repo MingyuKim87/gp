@@ -64,7 +64,8 @@ class ANP(abstract_NPs):
             self.train(True)
 
             # Pass query through deterministic encoders
-            deterministic_rep = self._deterministic_encoder(context_x, context_y, target_x) #[task_size, the number of target point, latent_dim]
+            deterministic_rep, attention_weights \
+                = self._deterministic_encoder(context_x, context_y, target_x) #[task_size, the number of target point, latent_dim]
 
             # Pass query through stochastic encoders and prior dist. 
             prior = self._stochastic_encoder(context_x, context_y) #[task_size, latent_dim]  
@@ -87,7 +88,7 @@ class ANP(abstract_NPs):
                 # kld loss from attention 
                 self.kld_additional = self._deterministic_encoder._attention.kl_loss
 
-            return p_y_pred, posterior, prior
+            return p_y_pred, posterior, prior, attention_weights, (deterministic_rep, stochastic_rep)
 
         else:
             # evaluation mode
@@ -113,7 +114,7 @@ class ANP(abstract_NPs):
             if hasattr(self._deterministic_encoder._attention, "kl_loss"):
                 self.kld_additional = self._deterministic_encoder._attention.kl_loss
             
-            return p_y_pred, mu, sigma
+            return p_y_pred, mu, sigma, attention_weights, (deterministic_rep, stochastic_rep)
 
 
 class variational_ANP(abstract_NPs):
@@ -168,7 +169,8 @@ class variational_ANP(abstract_NPs):
             self.train(True)
 
             # Pass query through deterministic encoders
-            deterministic_rep = self._deterministic_encoder(context_x, context_y, target_x) #[task_size, the number of target point, latent_dim]
+            deterministic_rep, attention_weights \
+                = self._deterministic_encoder(context_x, context_y, target_x) #[task_size, the number of target point, latent_dim]
 
             # variational_dropout
             deterministic_rep = self._dropout_layer(deterministic_rep)
@@ -193,13 +195,14 @@ class variational_ANP(abstract_NPs):
             if hasattr(self._dropout_layer, "kl_loss"):
                 self.kld_additional = self._dropout_layer.kl_loss
 
-            return p_y_pred, posterior, prior
+            return p_y_pred, posterior, prior, attention_weights, (deterministic_rep, stochastic_rep)
 
         else:
             # evaluation mode
             self.train(False)
             
-            deterministic_rep = self._deterministic_encoder(context_x, context_y, target_x) #[task_size, the number of target point, latent_dim]  
+            deterministic_rep, attention_weights \
+                = self._deterministic_encoder(context_x, context_y, target_x) #[task_size, the number of target point, latent_dim]  
 
             # variational_dropout
             deterministic_rep = self._dropout_layer(deterministic_rep)
@@ -222,7 +225,7 @@ class variational_ANP(abstract_NPs):
             if hasattr(self._dropout_layer, "kl_loss"):
                 self.kld_additional = self._dropout_layer.kl_loss
             
-            return p_y_pred, mu, sigma
+            return p_y_pred, mu, sigma, attention_weights, (deterministic_rep, stochastic_rep)
 
         
 

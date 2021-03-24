@@ -11,7 +11,7 @@ from torch.utils.data import Dataset, DataLoader
 from .helper.plot import plot_test
 
 class GPData(Dataset):
-    def __init__(self, num_tasks, num_points, x_dim=1, y_dim=1, sigma_scale=3., l1_scale=3., noise_std=1., n_freq=30):
+    def __init__(self, num_tasks, num_points, x_dim=1, y_dim=1, sigma_scale=3., l1_scale=3., n_freq=30, **kargs):
         '''
         Args:
             num_samples : length of dataset (total interation on a batch = length of dataset / task_size)
@@ -29,12 +29,27 @@ class GPData(Dataset):
 
         self._x_dim = x_dim
         self._y_dim = y_dim
-    
+
+        self._n_freq = n_freq
+
+        self._x_minimum = kargs.get("x_minimum", -4)
+        self._x_maximum = kargs.get("x_maximum", 4)
+
+        # Amplitude shift
+        self._shift = kargs.get("shift", None)
+
+        # whether RBF kernel parameters are random
+        self._is_random = kargs.get("is_random", False)
+
+        # t noise (come from bootstrapped NPs)
+        self._is_t_noise = kargs.get("is_t_noise", False)
+
         # K matrix
         self.kernel_list = self.__set_kernels(\
             sigma_scale=sigma_scale, \
             l1_scale=l1_scale,\
-            n_freq=n_freq
+            n_freq=n_freq, \
+            is_random=self._is_random
             )
 
         # Genereate Data
@@ -48,16 +63,32 @@ class GPData(Dataset):
 
     def __set_kernels(self, **kargs):        
         kernel_list = []
-        
-        if kargs.get("sigma_scale", None) is not None and \
-            kargs.get("l1_scale", None) is not None:
-            kernel = GPy.kern.RBF(input_dim=self._x_dim,\
-                variance=kargs.get("sigma_scale"),\
-                lengthscale=kargs.get("l1_scale")
-            )
-            kernel_list.append(kernel)
 
-        if kargs.get("n_freq", None) is not None:
+        # For rbf kernel
+        if self._is_random:
+            sigma_scale = 0.1 + (np.random.rand() * 0.9)
+            l1_scale = 0.1 + (np.random.rand() * 0.5)
+            
+            kernel = GPy.kern.RBF(input_dim=self._x_dim,\
+                variance=sigma_scale,\
+                lengthscale=l1_scale
+            )
+
+        elif kargs.get("sigma_scale", None) is not None and \
+            kargs.get("l1_scale", None) is not None:
+
+            kernel = GPy.kern.RBF(input_dim=self._x_dim,\
+                    variance=kargs.get("sigma_scale"),\
+                    lengthscale=kargs.get("l1_scale")
+                )
+        else:
+            NotImplementedError
+    
+        kernel_list.append(kernel)
+
+
+        # For periodic kernel (noise)
+        if kargs.get("n_freq", None) is not None and self._is_t_noise != True:
             kernel = GPy.kern.src.periodic.PeriodicExponential(
                 period=np.pi,
                 n_freq=kargs.get("n_freq")
@@ -80,7 +111,7 @@ class GPData(Dataset):
 
     def _generate_functions(self):
         num_total_points = self._num_points
-        range_x_value = np.linspace(-4., 4., num=num_total_points) #[the number of total points, ] 
+        range_x_value = np.linspace(self._x_minimum, self._x_maximum, num=num_total_points) #[the number of total points, ] 
 
         # x_values
         x_values = np.expand_dims(range_x_value, axis=-1) # [num_total_points, 1] # this function only work well "x_size = 1"
@@ -91,6 +122,12 @@ class GPData(Dataset):
         # Sampling
         y = np.random.multivariate_normal(np.zeros(self._num_points), C)[:, None]
         y = (y - y.mean())
+
+        y = y + self._shift if self._shift is not None else y
+
+        if self._is_t_noise and self._n_freq is None:
+            t_noise = 0.15 * np.random.standard_t(2.1, y.shape)
+            y += t_noise
 
         return x_values.astype(np.float32), y.astype(np.float32)
 
@@ -103,17 +140,19 @@ class GPData(Dataset):
 
         return data
 
-if __name__ == '__main__':
-    dataset = GPData(num_tasks=100, num_points=100)
+    def update_data(self):
+        """
+            Set function 
+        """
+        
+        # K matrix
+        self.kernel_list = self.__set_kernels()
 
-    x, y = dataset[0]
+        # Genereate Data
+        self.data = self.generate_data()
 
-    context_index = np.random.randint(low=0, high=100, size=5)
-
-    context_x = x[context_index]
-    context_y = y[context_index]
     
-    print(x.shape)
-    print(y.shape)
+if __name__ == '__main__':
+    a = np.random.rand()
 
-    plot_test(context_x, context_y, x, y)
+    print(a)

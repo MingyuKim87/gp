@@ -77,14 +77,15 @@ class Deterministic_Encoder(nn.Module):
 
         if self._attention is not None:
             # Attentive neural process
-            rep = self._attention(target_x, context_x, hidden)
+            rep, weights = self._attention(target_x, context_x, hidden)
             
         else:
             # Neural Processes
                 # Aggregation of representation
             rep = hidden.mean(dim=1)
+            weights = None
 
-        return rep
+        return rep, weights
 
 class Stochastic_Encoder(nn.Module):
     '''
@@ -121,7 +122,6 @@ class Stochastic_Encoder(nn.Module):
         self.hidden_to_mu = nn.Linear(self._layer_sizes[-1], num_latents)
         self.hidden_to_sigma = nn.Linear(self._layer_sizes[-1], num_latents)
 
-    
 
     def forward(self, context_x, context_y):
         '''

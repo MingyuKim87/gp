@@ -51,14 +51,59 @@ def train():
     # Data_loader
     name_list = ["train", "val"]
 
-    # Dataset
-    datasets = [GPData(num_tasks=base_config["TASK_SIZE"]*1000, \
-        num_points=base_config["NUM_POINTS"],
+    # Dataset (RBF kernel, variable params)
+    # datasets = [GPData(num_tasks=base_config["TRAIN_TASK_SIZE"]*10, \
+    #     num_points=base_config["TRAIN_NUM_POINTS"],
+    #     x_dim=base_config["INPUT_DIM"],
+    #     y_dim=base_config["OUTPUT_DIM"],
+    #     n_freq=None,
+    #     is_random = True, 
+    #     ) for _ in range(len(name_list))]
+
+    # Dataset (RBF kernel, fixed param)
+    # datasets = [GPData(num_tasks=base_config["TRAIN_TASK_SIZE"]*10, \
+    #     num_points=base_config["TRAIN_NUM_POINTS"],
+    #     x_dim=base_config["INPUT_DIM"],
+    #     y_dim=base_config["OUTPUT_DIM"],
+    #     n_freq=None,
+    #     is_random = False, 
+    #     ) for _ in range(len(name_list))]
+    
+    # # #Dataset (Two kernels, variable params)
+    # datasets = [GPData(num_tasks=base_config["TRAIN_TASK_SIZE"]*10, \
+    #     num_points=base_config["TRAIN_NUM_POINTS"],
+    #     x_dim=base_config["INPUT_DIM"],
+    #     y_dim=base_config["OUTPUT_DIM"],
+    #     is_random = True, 
+    #     ) for _ in range(len(name_list))]
+
+    # #Dataset (Two kernel RBF kernel, static params)
+    datasets = [GPData(num_tasks=base_config["TRAIN_TASK_SIZE"]*10, \
+        num_points=base_config["TRAIN_NUM_POINTS"],
         x_dim=base_config["INPUT_DIM"],
-        y_dim=base_config["OUTPUT_DIM"]) for _ in range(len(name_list))]
+        y_dim=base_config["OUTPUT_DIM"],
+        is_random = False,
+        is_t_noise = False 
+        ) for _ in range(len(name_list))]
+
+    #Dataset (RBF kernel + t_noise)
+    # datasets = [GPData(num_tasks=base_config["TRAIN_TASK_SIZE"]*10, \
+    #     num_points=base_config["TRAIN_NUM_POINTS"],
+    #     x_dim=base_config["INPUT_DIM"],
+    #     y_dim=base_config["OUTPUT_DIM"],
+    #     n_freq = None,
+    #     is_random = True, 
+    #     is_t_noise = True
+    #     ) for _ in range(len(name_list))]
+
+    # # Dataset
+    # datasets = [SineData(num_tasks=base_config["TEST_TASK_SIZE"]*10, \
+    #     num_points=base_config["TEST_NUM_POINTS"],
+    #     x_dim =base_config["INPUT_DIM"],
+    #     y_dim=base_config["OUTPUT_DIM"]) for _ in range(len(name_list))]
 
     dataloaders = dict([\
-        (name, DataLoader(dataset, batch_size=base_config['TASK_SIZE'], shuffle=True)) \
+        (name, DataLoader(dataset, batch_size=base_config['TRAIN_TASK_SIZE'], shuffle=True)) \
         for name, dataset in zip(name_list, datasets)]
     )
 
@@ -66,7 +111,10 @@ def train():
     criterion = elbo_loss(args.model)
 
     # Set the optimizer
-    optimizer = optim.Adam(model.parameters(), lr=config['LEARNING_RATE'])
+    if 'WEIGHT_DECAY' in config:
+        optimizer = optim.Adam(model.parameters(), lr=config['LEARNING_RATE'], weight_decay=config['WEIGHT_DECAY'])
+    else:
+        optimizer = optim.Adam(model.parameters(), lr=config['LEARNING_RATE'])
 
     # Trainer
     regressor_trainer = meta_1d_regressor_trainer(model, criterion, device, \
@@ -95,13 +143,46 @@ def test():
     save_result_dir = get_model_dir_path_config()
 
     # Data_loader
-    name_list = ["test"]
+    name_list = ["test", "val"]
+
+    # # Dataset
+    datasets = [GPData(num_tasks=base_config["TEST_TASK_SIZE"]*10, \
+            num_points=base_config["TEST_NUM_POINTS"], \
+            x_dim=base_config["INPUT_DIM"], \
+            y_dim=base_config["OUTPUT_DIM"],\
+            ), 
+        GPData(num_tasks=base_config["TRAIN_TASK_SIZE"]*10, \
+            num_points=base_config["TRAIN_NUM_POINTS"],
+            x_dim=base_config["INPUT_DIM"],
+            y_dim=base_config["OUTPUT_DIM"],
+            n_freq = None,
+            is_random = False,
+            is_t_noise = True 
+            )
+        ]
+
+    # datasets = [GPData(num_tasks=base_config["TEST_TASK_SIZE"]*10, \
+    #     num_points=base_config["TEST_NUM_POINTS"], \
+    #     x_dim=base_config["INPUT_DIM"], \
+    #     y_dim=base_config["OUTPUT_DIM"], x_minimum=-6., x_maximum=6.,\
+    #     shift=np.random.randint(10) * np.random.randn()
+    #     ) for _ in range(len(name_list))]
 
     # Dataset
-    datasets = [GPData(num_tasks=base_config["TASK_SIZE"]*1000, \
-        num_points=base_config["NUM_POINTS"],
-        x_dim=base_config["INPUT_DIM"],
-        y_dim=base_config["OUTPUT_DIM"]) for _ in range(len(name_list))]
+    # datasets = [SineData(num_tasks=base_config["TEST_TASK_SIZE"]*10, \
+    #     num_points=base_config["TEST_NUM_POINTS"],
+    #     x_dim =base_config["INPUT_DIM"],
+    #     y_dim=base_config["OUTPUT_DIM"]) for _ in range(len(name_list))]
+
+    # dataloaders = dict([\
+    #     (name, DataLoader(dataset, batch_size=base_config['TEST_TASK_SIZE'], shuffle=False)) \
+    #     for name, dataset in zip(name_list, datasets)]
+    # )
+
+    # dataloaders = dict([\
+    #     (name, DataLoader(dataset, batch_size=base_config['TEST_TASK_SIZE'], shuffle=False)) \
+    #     for name, dataset in zip(name_list, datasets)]
+    # )
 
     dataloaders = dict([\
         (name, DataLoader(dataset, batch_size=1, shuffle=False)) \
@@ -137,15 +218,19 @@ def test():
     regressor_tester = meta_1d_regressor_trainer(algos, criterion, device, \
         dataloaders['test'],\
         savedir=save_result_dir,
+        val_loader=dataloaders['val'],
         num_context=base_config['NUM_CONTEXT_POINTS'],\
-        num_extra_target=base_config['NUM_POINTS'] - \
-            base_config['NUM_CONTEXT_POINTS'])
+        num_extra_target=dataloaders['test'].dataset._num_points - \
+            base_config['NUM_CONTEXT_POINTS'],
+        is_average_by_points=base_config['IS_AVERAGE_BY_POINTS']
+    )
 
     # Test
     regressor_tester.test()
     
 if __name__ == "__main__":
-    test()
+    train()
+
     
 
 

@@ -78,7 +78,7 @@ class NP(abstract_NPs):
             p_y_pred = torch.distributions.Normal(mu, sigma)
 
             
-            return p_y_pred, posterior, prior
+            return p_y_pred, posterior, prior, None, stochastic_rep
 
         else:
             # evaluation mode
@@ -98,4 +98,4 @@ class NP(abstract_NPs):
             # Distribution
             p_y_pred = torch.distributions.Normal(mu, sigma)
 
-            return p_y_pred, mu, sigma
+            return p_y_pred, mu, sigma, None, stochastic_rep

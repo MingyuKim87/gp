@@ -11,9 +11,8 @@ def parse_args():
 
     common = parser.add_argument_group('common')
     common.add_argument('--device', default='1', type=str, help='which device to use')
-    common.add_argument('--num_context_train', default='2000', type=int, help='generate meta train datasets')
     common.add_argument('--model', default='ANP', type=str, help='which model to use "ANP" or "NP" or "CNP"')
-    common.add_argument('--epochs', default=20000, type=int, help='epoch number')
+    common.add_argument('--epochs', default=500000, type=int, help='epoch number')
     common.add_argument('--model_root_dir_path', default="./save_models/", \
          type=str, help='directory path for test data')
     

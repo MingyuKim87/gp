@@ -9,7 +9,7 @@ from models.anp import ANP, variational_ANP
 from models.np import NP
 from models.parts.attention import Attention
 
-def context_target_split_trainer(x, y, num_context, num_total_point, is_test=False):
+def context_target_split_trainer(x, y, num_context, num_total_point, is_test=False, **kargs):
     """
         Args:
             x : batch_size, total_data_points, x_dim
@@ -34,7 +34,7 @@ def context_target_split_trainer(x, y, num_context, num_total_point, is_test=Fal
     x_target = x[:, locations, :] if not is_test else x
     y_target = y[:, locations, :] if not is_test else y
 
-    return x_context, y_context, x_target, y_target
+    return x_context, y_context, x_target, y_target, locations[:num_context]
 
 def set_model_parameters(model_name, config, base_config):
     # output dim
@@ -60,62 +60,49 @@ def set_model(model_name, config, device):
     elif model_name == "NP":
         model = NP(config['ENCODER_INPUT_DIM'], config['ENCODER_LAYER_SIZES'], config['NUM_LATENT'],\
             config['DECODER_INPUT_DIM'], config['DECODER_LAYER_SIZE'], config['OUTPUT_DIM'], device)
-    elif model_name == "ANP":
-        if config['ATTENTION_TYPE'] == 'multihead' or config['ATTENTION_TYPE'] == 'soft_attention':
-            DIM = {'q_last_dim' : config['INPUT_DIM'], 'k_last_dim' : config['INPUT_DIM'], \
-                'v_last_dim' : config['NUM_LATENT']}
-        else:
-            DIM={}
 
-        # Normal multihead attention
-        
-        attention = \
-            Attention(device, embedding_type='mlp', layer_sizes=[config['HIDDEN_SIZE']]*2, \
+    elif config['ATTENTION_TYPE'] is not None:
+        DIM = {'q_last_dim' : config['INPUT_DIM'], 'k_last_dim' : config['INPUT_DIM'], \
+                'v_last_dim' : config['NUM_LATENT']}
+
+        # Attention Modules
+        if model_name == "ANP" or model_name == "ANP_variational":
+            # Normal multihead attention
+            attention = \
+                Attention(device, embedding_type='mlp', layer_sizes=[config['HIDDEN_SIZE']]*2, \
                 dim=DIM, att_type=config['ATTENTION_TYPE'])
 
-        
-        # ANP model
-        model = ANP(config['ENCODER_INPUT_DIM'], config['ENCODER_LAYER_SIZES'], config['NUM_LATENT'],\
-            config['DECODER_INPUT_DIM'], config['DECODER_LAYER_SIZE'], config['OUTPUT_DIM'], attention, device)
+        elif model_name == "ANP_log_normal" or model_name.find("ANP_log_normal") >= 0:
+            attention = \
+                Attention(device, embedding_type='mlp', layer_sizes=[config['HIDDEN_SIZE']]*2, \
+                dim=DIM, att_type=config['ATTENTION_TYPE'], prior_type=config["PRIOR_TYPE"],
+                eps=config['EPS'], training=config['RSAMPLE_TRAINING'],\
+                sigma_normal_posterior=config['SIGMA_NORMAL_POSTERIOR'],\
+                sigma_normal_prior=config['SIGMA_NORMAL_PRIOR'])
 
-    elif model_name == "ANP_log_normal" or model_name == "ANP_weibull":
-        if config['ATTENTION_TYPE'] == 'multihead' or config['ATTENTION_TYPE'] == 'soft_attention':
-            DIM = {'q_last_dim' : config['INPUT_DIM'], 'k_last_dim' : config['INPUT_DIM'], \
-                'v_last_dim' : config['NUM_LATENT']}
+        elif model_name == "ANP_weibull" or model_name.find("ANP_weibull") >= 0:
+            # Bayesian attention : weibull
+            attention = \
+                Attention(device, embedding_type='mlp', layer_sizes=[config['HIDDEN_SIZE']]*2, \
+                dim=DIM, att_type=config['ATTENTION_TYPE'], prior_type=config["PRIOR_TYPE"],\
+                eps=config['EPS'], training=config['RSAMPLE_TRAINING'],\
+                k_weibull=config['K_WEIBULL'])
         else:
-            DIM={}
+            attention = None
 
-        # Bayesian attention : log_normal
-        attention = \
-            Attention(device, embedding_type='mlp', layer_sizes=[config['HIDDEN_SIZE']]*2, \
-                dim=DIM, att_type=config['ATTENTION_TYPE'], \
-                prior_type=config["PRIOR_TYPE"], variational_type=config["VARIATION_TYPE"])
-
-        # ANP model
-        model = ANP(config['ENCODER_INPUT_DIM'], config['ENCODER_LAYER_SIZES'], config['NUM_LATENT'],\
-            config['DECODER_INPUT_DIM'], config['DECODER_LAYER_SIZE'], config['OUTPUT_DIM'], attention, device)
-
-    
-    elif model_name == "ANP_variational":
-        if config['ATTENTION_TYPE'] == 'multihead':
-            DIM = {'q_last_dim' : config['INPUT_DIM'], 'k_last_dim' : config['INPUT_DIM'], \
-                'v_last_dim' : config['NUM_LATENT']}
+        # Models
+        if model_name.find("variational") >= 0:
+            # variational ANP (after attention value)
+            model = variational_ANP(config['ENCODER_INPUT_DIM'], config['ENCODER_LAYER_SIZES'], config['NUM_LATENT'],\
+                config['DECODER_INPUT_DIM'], config['DECODER_LAYER_SIZE'], config['OUTPUT_DIM'], attention, device)            
         else:
-            DIM = {}
-
-        # Normal multihead attention
-        attention = \
-            Attention(device, embedding_type='mlp', layer_sizes=[config['HIDDEN_SIZE']]*2, \
-                dim=DIM, att_type=config['ATTENTION_TYPE'])
-
-        # variational AMP
-        model = variational_ANP(config['ENCODER_INPUT_DIM'], config['ENCODER_LAYER_SIZES'], config['NUM_LATENT'],\
-            config['DECODER_INPUT_DIM'], config['DECODER_LAYER_SIZE'], config['OUTPUT_DIM'], attention, device)            
+            # ANP
+            model = ANP(config['ENCODER_INPUT_DIM'], config['ENCODER_LAYER_SIZES'], config['NUM_LATENT'],\
+                config['DECODER_INPUT_DIM'], config['DECODER_LAYER_SIZE'], config['OUTPUT_DIM'], attention, device)
     else:
         assert NotImplementedError
 
     return model
-
 
 def get_model_dir_path_config():
         # Spliting directory and file path and return directory path + "Result"
