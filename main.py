@@ -120,7 +120,9 @@ def train():
     regressor_trainer = meta_1d_regressor_trainer(model, criterion, device, \
         dataloaders['train'] ,optimizer, args.epochs, save_model_dir,\
         dataloaders['val'], False,\
-        base_config['NUM_CONTEXT_POINTS'], base_config['NUM_EXTRA_TARGET_POINTS'])
+        base_config['NUM_CONTEXT_POINTS'], base_config['NUM_EXTRA_TARGET_POINTS'],\
+        is_iwae=base_config['IS_IWAE'],\
+        iw_samples=base_config['IW_SAMPLES'])
 
     # Training
     regressor_trainer.train()

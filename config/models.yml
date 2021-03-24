@@ -8,7 +8,8 @@ Base:
   TRAIN_NUM_POINTS : 50 # For training (Boostrapped NPs)
   TEST_NUM_POINTS: 100 # For plotting
   IS_AVERAGE_BY_POINTS : False
-  
+  IS_IWAE : True
+  IW_SAMPLES : 5
   
 CNP:
   # Model

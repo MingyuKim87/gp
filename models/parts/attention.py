@@ -127,9 +127,16 @@ class Attention(nn.Module):
             q, k = (x1, x2)
 
             # Set dimension
-            batch, _, filter_size = q.size()
-            q = q.view((-1, filter_size))
-            k = k.view((-1, filter_size))
+            # batch, _, filter_size = q.size()
+            
+            # q = q.view((-1, filter_size))
+            # k = k.view((-1, filter_size))
+
+            # Set dimension (New)
+            input_shape = q.size()
+            
+            q = q.view((-1, input_shape[-1]))
+            k = k.view((-1, input_shape[-1]))
 
             # embedding using MLP
             for i, layer in enumerate(self._layers):
@@ -141,8 +148,12 @@ class Attention(nn.Module):
                     k = F.relu(layer(k))
 
             # Restoring dimension
-            q = q.view((batch, -1, self._layer_sizes[-1]))
-            k = k.view((batch, -1, self._layer_sizes[-1]))
+            # q = q.view((batch, -1, self._layer_sizes[-1]))
+            # k = k.view((batch, -1, self._layer_sizes[-1]))
+
+            # Restoring dimension (New)
+            q = q.view((*input_shape[:-2], -1, self._layer_sizes[-1]))
+            k = k.view((*input_shape[:-2], -1, self._layer_sizes[-1]))
 
         else:
             raise NameError("'rep' not including ['identity', 'mlp']")
@@ -295,6 +306,9 @@ class Attention(nn.Module):
             tensor of shape # [Batch_size, # of total_points, representation dim(latent_dim)]
          '''
 
+        # dim
+        ndim = q.dim()
+        
         # Size
         q_dim = q.size()
         k_dim = k.size()
@@ -311,9 +325,14 @@ class Attention(nn.Module):
         '''
             q_dim, k_dim, v_dim 정보들을 모두 수정하기 (정보가 없음)
         '''
-        q_prime = torch.transpose(self.weights_q(q).view(q_dim[0], -1, self._num_heads, q_dim[-1]), 1, 2) #[task_size, num_heads, # of total point, q_latent_dim]
-        k_prime = torch.transpose(self.weights_k(k).view(k_dim[0], -1, self._num_heads, k_dim[-1]), 1, 2) #[task_size, num_heads, # of context point, q_latent_dim]
-        v_prime = torch.transpose(self.weights_v(v).view(v_dim[0], -1, self._num_heads, v_dim[-1]), 1, 2) #[task_size, num_heads, # of context point, q_latent_dim]
+        if ndim==3:
+            q_prime = torch.transpose(self.weights_q(q).view(q_dim[0], -1, self._num_heads, q_dim[-1]), 1, 2) #[task_size, num_heads, # of total point, q_latent_dim]
+            k_prime = torch.transpose(self.weights_k(k).view(k_dim[0], -1, self._num_heads, k_dim[-1]), 1, 2) #[task_size, num_heads, # of context point, q_latent_dim]
+            v_prime = torch.transpose(self.weights_v(v).view(v_dim[0], -1, self._num_heads, v_dim[-1]), 1, 2) #[task_size, num_heads, # of context point, q_latent_dim]
+        else: # for importance weighted
+            q_prime = torch.transpose(self.weights_q(q).view(*q_dim[:-2], -1, self._num_heads, q_dim[-1]), 2, 3) #[task_size, num_heads, # of total point, q_latent_dim]
+            k_prime = torch.transpose(self.weights_k(k).view(*k_dim[:-2], -1, self._num_heads, k_dim[-1]), 2, 3) #[task_size, num_heads, # of context point, q_latent_dim]
+            v_prime = torch.transpose(self.weights_v(v).view(*v_dim[:-2], -1, self._num_heads, v_dim[-1]), 2, 3) #[task_size, num_heads, # of context point, q_latent_dim]
 
         '''
         q_prime = torch.transpose(torch.reshape(torch.matmul(q, self.weights_q), self.q_dim[0], -1, num_heads, self.q_dim[-1]), 1, 2)
@@ -324,8 +343,12 @@ class Attention(nn.Module):
         output, weights = self.dot_product_attention(q_prime, k_prime, v_prime, normalize=True)
         
         # mean
-        output = output.mean(dim=1)
-        weights = weights.mean(dim=1)
+        # output = output.mean(dim=1)
+        # weights = weights.mean(dim=1)
+        
+        # mean
+        output = output.mean(dim=-3)
+        weights = weights.mean(dim=-3)
 
         representation = output + representation 
 

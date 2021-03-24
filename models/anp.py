@@ -59,6 +59,9 @@ class ANP(abstract_NPs):
                 sigma : std of multivariate didstribution [batch_size, the number of points, y_size(dim)]
         '''
 
+        # tensor dim
+        ndim = context_x.dim()
+        
         if target_y is not None:
             # training model
             self.train(True)
@@ -75,7 +78,10 @@ class ANP(abstract_NPs):
             stochastic_rep = prior.rsample() #[task_size, num_latents]
 
             # 뻥튀기
-            stochastic_rep = torch.unsqueeze(stochastic_rep, dim=1).repeat(1, num_total_points, 1)  #[batch_size, the number of points, latent_dim]
+            if ndim==3:
+                stochastic_rep = torch.unsqueeze(stochastic_rep, dim=-2).repeat(1, num_total_points, 1)  #[batch_size, the number of points, latent_dim]
+            else:
+                stochastic_rep = torch.unsqueeze(stochastic_rep, dim=-2).repeat(1, 1, num_total_points, 1)  #[batch_size, the number of points, latent_dim]
             
             # Decoding
             mu, sigma = self._decoder(target_x, stochastic_rep, deterministic_rep)

@@ -55,6 +55,8 @@ class CNP(abstract_NPs):
                 mu : mean of multivariate distribution [batch_size, the number of points, y_size(dim)]
                 sigma : std of multivariate didstribution [batch_size, the number of points, y_size(dim)]
         '''
+        # tensor dim
+        ndim = context_x.dim()
         
         if target_y is not None:
             self.train(True)
@@ -65,8 +67,14 @@ class CNP(abstract_NPs):
         rep, weights = self._deterministic_encoder(context_x, context_y)
 
         # 뻥튀기
-        rep = torch.unsqueeze(rep, dim=1).repeat(1, num_total_points, 1)  #[batch_size, the number of points, latent_dim]
-            
+        # rep = torch.unsqueeze(rep, dim=1).repeat(1, num_total_points, 1)  #[batch_size, the number of points, latent_dim]
+
+        # 뻥튀기(New)
+        if ndim == 3:
+            rep = torch.unsqueeze(rep, dim=-2).repeat(1, num_total_points, 1)  #[batch_size, the number of points, latent_dim]
+        else:
+            rep = torch.unsqueeze(rep, dim=-2).repeat(1, 1, num_total_points, 1)  #[batch_size, the number of points, latent_dim]
+    
         # Decoding
         mu, sigma = self._decoder(target_x, rep)
 

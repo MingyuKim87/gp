@@ -60,10 +60,12 @@ class Deterministic_Encoder(nn.Module):
         encoder_input = torch.cat((context_x, context_y), dim=-1) # [batch_size, the number of points, x_size + y_size]
 
         # Shape
-        task_size, _, filter_size = tuple(encoder_input.shape)
+        #task_size, _, filter_size = tuple(encoder_input.shape)
+        input_shape = tuple(encoder_input.shape)
 
         # Input
-        hidden = encoder_input.view((-1, filter_size))
+        # hidden = encoder_input.view((-1, filter_size))
+        hidden = encoder_input.view((-1, input_shape[-1]))
 
         # MLP embedidng for NP
         for i, layer in enumerate(self._layers):
@@ -73,16 +75,17 @@ class Deterministic_Encoder(nn.Module):
         hidden = self._last_layer(hidden)
 
         # Reshaping
-        hidden = hidden.view((task_size, -1, self._num_latents)) # [batch_size, the number of point, the last element in the list]
+        # hidden = hidden.view((task_size, -1, self._num_latents)) # [batch_size, the number of point, the last element in the list]
+        hidden = hidden.view((*input_shape[:-2], -1, self._num_latents)) # [(n_sample, batch_size), the number of point, the last element in the list]
 
         if self._attention is not None:
             # Attentive neural process
             rep, weights = self._attention(target_x, context_x, hidden)
             
         else:
-            # Neural Processes
+            # Conditional neural processes
                 # Aggregation of representation
-            rep = hidden.mean(dim=1)
+            rep = hidden.mean(dim=-2)
             weights = None
 
         return rep, weights
@@ -140,20 +143,24 @@ class Stochastic_Encoder(nn.Module):
         encoder_input = torch.cat((context_x, context_y), dim=-1) # [batch_size, the number of points, x_size + y_size]
 
         # Shape
-        task_size, _, filter_size = tuple(encoder_input.shape)
+        input_shape = tuple(encoder_input.shape)
+        #task_size, _, filter_size = tuple(encoder_input.shape)
 
+        
         # Reshaping Inputs
-        hidden = encoder_input.view((-1, filter_size))
+        # hidden = encoder_input.view((-1, filter_size))
+        hidden = encoder_input.view((-1, input_shape[-1]))
 
         # MLP embedidng for NP
         for i, layer in enumerate(self._layers):
             hidden = F.relu(layer(hidden))
 
         # Reshaping hidden
-        hidden = hidden.view(task_size, -1, self._layer_sizes[-1])
+        #hidden = hidden.view(task_size, -1, self._layer_sizes[-1])
+        hidden = hidden.view(*input_shape[:-2], -1, self._layer_sizes[-1])
 
         # Aggregation
-        hidden = hidden.mean(dim=1)
+        hidden = hidden.mean(dim=-2)
 
         # last layer
         mu = self.hidden_to_mu(hidden) # [batch_size, num_lantets]
@@ -216,13 +223,17 @@ class Decoder(nn.Module):
             hidden = torch.cat((stochastic_rep, target_x), dim = -1)
         
         # Shape
-        batch_size, _, filter_size = tuple(hidden.shape)
+            # DEBUG
+        #batch_size, _, filter_size = tuple(hidden.shape)
+        input_shape = tuple(hidden.shape)
 
         # Input
-        hidden = hidden.view(-1, filter_size)
+        # hidden = hidden.view(-1, filter_size)
+        hidden = hidden.view(-1, input_shape[-1])
 
         # Exceptional Treatement
-        assert filter_size == self.input_dim, "You must match the dimension of input_dim and representations + target_x"
+        # assert filter_size == self.input_dim, "You must match the dimension of input_dim and representations + target_x"
+        assert input_shape[-1] == self.input_dim, "You must match the dimension of input_dim and representations + target_x"
         
         # MLP embedding for NP
         for i, layer in enumerate(self._layers):
@@ -233,7 +244,11 @@ class Decoder(nn.Module):
         log_sigma = self.hidden_to_sigma(hidden) # [batch_size*num_data_points, num_lantets]
 
         # Reshaping mu and log_sigma
-        mu = mu.view(batch_size, -1, self._output_dim)
-        sigma = 0.1 + 0.9 * F.softplus(log_sigma.view(batch_size, -1, self._output_dim))
+            # DEBUG
+        # mu = mu.view(batch_size, -1, self._output_dim)
+        # sigma = 0.1 + 0.9 * F.softplus(log_sigma.view(batch_size, -1, self._output_dim))
+
+        mu = mu.view(*input_shape[:-2], -1, self._output_dim)
+        sigma = 0.1 + 0.9 * F.softplus(log_sigma.view(*input_shape[:-2], -1, self._output_dim))
 
         return mu, sigma

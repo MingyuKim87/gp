@@ -16,7 +16,7 @@ class meta_1d_regressor_trainer(object):
     def __init__(self, models, criterion, device, data_loader,\
         optimizer=None, num_epochs=None, savedir=None, \
         val_loader=None, is_tensorboard=False, \
-        num_context = 3, num_extra_target=5, is_average_by_points=False):
+        num_context = 3, num_extra_target=5, is_average_by_points=False, is_iwae=False, iw_samples=5):
 
         # Training Setting
         self.optimizer = optimizer
@@ -44,6 +44,8 @@ class meta_1d_regressor_trainer(object):
         self.figure_freq = 3000
         self.max_step = 200000
         self.change_params_freq = 10000
+        self.is_iwae = is_iwae
+        self.iw_samples = iw_samples
 
         # Model and result save (I/O)
         self.savedir = savedir
@@ -297,6 +299,15 @@ class meta_1d_regressor_trainer(object):
                 context_x.to(self.device), context_y.to(self.device), \
                 target_x.to(self.device), target_y.to(self.device)
 
+            if self.is_iwae:
+                # 뻥튀기
+                    # x
+                context_x = torch.unsqueeze(context_x, dim=0).repeat(self.iw_samples, 1, 1, 1)
+                target_x = torch.unsqueeze(target_x, dim=0).repeat(self.iw_samples, 1, 1, 1)
+                    # y
+                context_y = torch.unsqueeze(context_y, dim=0).repeat(self.iw_samples, 1, 1, 1)
+                target_y = torch.unsqueeze(target_y, dim=0).repeat(self.iw_samples, 1, 1, 1)
+
             # Feed forward
             p_y_pred, posterior, prior, attention_weights, reps = \
                 self.model(context_x, context_y, target_x, num_total_point, target_y)
@@ -306,11 +317,19 @@ class meta_1d_regressor_trainer(object):
                 if hasattr(self.model, "kld_additional") else None
             
             # Evaluate loss function
-            loss, log_p, kld, kld_additional = self.criterion(p_y_pred, \
-                target_y, \
-                posterior,\
-                prior,\
-                kld_additional=kld_additional)
+            if self.is_iwae:
+                loss, log_p, kld, kld_additional = self.criterion(p_y_pred, \
+                    target_y, \
+                    posterior,\
+                    prior,\
+                    kld_additional=kld_additional,\
+                    is_iwae=True)
+            else:
+                loss, log_p, kld, kld_additional = self.criterion(p_y_pred, \
+                    target_y, \
+                    posterior,\
+                    prior,\
+                    kld_additional=kld_additional)
 
             # loss
             epoch_loss += loss.item()
