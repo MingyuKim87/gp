@@ -67,7 +67,7 @@ def train():
     #     y_dim=base_config["OUTPUT_DIM"],
     #     n_freq=None,
     #     is_random = False, 
-    #     ) for _ in range(len(name_list))]
+    #     ) for _ in range(len(name_list))]ㅁ
     
     # # #Dataset (Two kernels, variable params)
     # datasets = [GPData(num_tasks=base_config["TRAIN_TASK_SIZE"]*10, \

@@ -143,10 +143,9 @@ class Stochastic_Encoder(nn.Module):
         encoder_input = torch.cat((context_x, context_y), dim=-1) # [batch_size, the number of points, x_size + y_size]
 
         # Shape
-        input_shape = tuple(encoder_input.shape)
         #task_size, _, filter_size = tuple(encoder_input.shape)
+        input_shape = tuple(encoder_input.shape)
 
-        
         # Reshaping Inputs
         # hidden = encoder_input.view((-1, filter_size))
         hidden = encoder_input.view((-1, input_shape[-1]))
@@ -240,7 +239,7 @@ class Decoder(nn.Module):
             hidden = F.relu(layer(hidden))
     
         # Forwarding mean and std
-        mu = self.hidden_to_mu(hidden) # [batch_size*num_data_points, num_lantets]
+        mu = self.hidden_to_mu(hidden) # [batch_size*num_data_points, num_latents]
         log_sigma = self.hidden_to_sigma(hidden) # [batch_size*num_data_points, num_lantets]
 
         # Reshaping mu and log_sigma

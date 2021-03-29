@@ -325,11 +325,11 @@ class Attention(nn.Module):
         '''
             q_dim, k_dim, v_dim 정보들을 모두 수정하기 (정보가 없음)
         '''
-        if ndim==3:
+        if ndim==3: # (task_size, # of points, x_dim)
             q_prime = torch.transpose(self.weights_q(q).view(q_dim[0], -1, self._num_heads, q_dim[-1]), 1, 2) #[task_size, num_heads, # of total point, q_latent_dim]
             k_prime = torch.transpose(self.weights_k(k).view(k_dim[0], -1, self._num_heads, k_dim[-1]), 1, 2) #[task_size, num_heads, # of context point, q_latent_dim]
             v_prime = torch.transpose(self.weights_v(v).view(v_dim[0], -1, self._num_heads, v_dim[-1]), 1, 2) #[task_size, num_heads, # of context point, q_latent_dim]
-        else: # for importance weighted
+        else: # for importance weighted : (n_iter, task_size, # of points, x_dim)
             q_prime = torch.transpose(self.weights_q(q).view(*q_dim[:-2], -1, self._num_heads, q_dim[-1]), 2, 3) #[task_size, num_heads, # of total point, q_latent_dim]
             k_prime = torch.transpose(self.weights_k(k).view(*k_dim[:-2], -1, self._num_heads, k_dim[-1]), 2, 3) #[task_size, num_heads, # of context point, q_latent_dim]
             v_prime = torch.transpose(self.weights_v(v).view(*v_dim[:-2], -1, self._num_heads, v_dim[-1]), 2, 3) #[task_size, num_heads, # of context point, q_latent_dim]
@@ -569,6 +569,7 @@ class Attention(nn.Module):
         scale = math.sqrt(d_k)
 
         # Transpose 
+            # change the q_latent_dim axis into # of context_points  
             # [batch_size, x_size(dim), # of context_points]
             # if multihead, #[task_size, num_heads, q_latent_dim , # of context point]
         k = torch.transpose(k, -1, -2) 
@@ -745,6 +746,9 @@ class Attention(nn.Module):
             q_dim, k_dim, v_dim 정보들을 모두 수정하기 (정보가 없음)
         '''
         
+        # dim
+        ndim = q.dim()
+        
         # Size
         q_dim = q.size()
         k_dim = k.size()
@@ -758,9 +762,17 @@ class Attention(nn.Module):
         representation = 1.0
         
         # forward
-        q_prime = torch.transpose(self.weights_q(q).view(q_dim[0], -1, self._num_heads, q_dim[-1]), 1, 2) #[task_size, num_heads, # of total point, q_latent_dim]
-        k_prime = torch.transpose(self.weights_k(k).view(k_dim[0], -1, self._num_heads, k_dim[-1]), 1, 2) #[task_size, num_heads, # of context point, q_latent_dim]
-        v_prime = torch.transpose(self.weights_v(v).view(v_dim[0], -1, self._num_heads, v_dim[-1]), 1, 2) #[task_size, num_heads, # of context point, q_latent_dim]
+        '''
+            q_dim, k_dim, v_dim 정보들을 모두 수정하기 (정보가 없음)
+        '''
+        if ndim == 3: # (task_size, # of points, x_dim)
+            q_prime = torch.transpose(self.weights_q(q).view(q_dim[0], -1, self._num_heads, q_dim[-1]), 1, 2) #[task_size, num_heads, # of total point, q_latent_dim]
+            k_prime = torch.transpose(self.weights_k(k).view(k_dim[0], -1, self._num_heads, k_dim[-1]), 1, 2) #[task_size, num_heads, # of context point, q_latent_dim]
+            v_prime = torch.transpose(self.weights_v(v).view(v_dim[0], -1, self._num_heads, v_dim[-1]), 1, 2) #[task_size, num_heads, # of context point, q_latent_dim]
+        else: # for importance weighted : (n_iter, task_size, # of points, x_dim)
+            q_prime = torch.transpose(self.weights_q(q).view(*q_dim[:-2], -1, self._num_heads, q_dim[-1]), -3, -2) #[task_size, num_heads, # of total point, q_latent_dim]
+            k_prime = torch.transpose(self.weights_k(k).view(*k_dim[:-2], -1, self._num_heads, k_dim[-1]), -3, -2) #[task_size, num_heads, # of context point, q_latent_dim]
+            v_prime = torch.transpose(self.weights_v(v).view(*v_dim[:-2], -1, self._num_heads, v_dim[-1]), -3, -2) #[task_size, num_heads, # of context point, q_latent_dim]
 
         # soft_attention_log_normal
         output, weights = self.soft_attention_log_normal_2(q_prime, k_prime, v_prime, scale=scale, normalize=normalize,\
@@ -769,8 +781,8 @@ class Attention(nn.Module):
             sigma_normal_prior=sigma_normal_prior)
 
         # mean
-        output = output.mean(dim=1)
-        weights = weights.mean(dim=1)
+        output = output.mean(dim=-3)
+        weights = weights.mean(dim=-3)
 
         representation = output + representation 
         
@@ -782,6 +794,9 @@ class Attention(nn.Module):
         prior_type="contextual",eps=1e-20, training=1.0,\
         k_weibull=30):
 
+        # dim
+        ndim = q.dim()
+        
         # Size
         q_dim = q.size()
         k_dim = k.size()
@@ -794,9 +809,17 @@ class Attention(nn.Module):
         representation = 1.0
         
         # forward
-        q_prime = torch.transpose(self.weights_q(q).view(q_dim[0], -1, self._num_heads, q_dim[-1]), 1, 2) #[task_size, num_heads, # of total point, q_latent_dim]
-        k_prime = torch.transpose(self.weights_k(k).view(k_dim[0], -1, self._num_heads, k_dim[-1]), 1, 2) #[task_size, num_heads, # of context point, q_latent_dim]
-        v_prime = torch.transpose(self.weights_v(v).view(v_dim[0], -1, self._num_heads, v_dim[-1]), 1, 2) #[task_size, num_heads, # of context point, q_latent_dim]
+        '''
+            q_dim, k_dim, v_dim 정보들을 모두 수정하기 (정보가 없음)
+        '''
+        if ndim == 3:
+            q_prime = torch.transpose(self.weights_q(q).view(q_dim[0], -1, self._num_heads, q_dim[-1]), 1, 2) #[task_size, num_heads, # of total point, q_latent_dim]
+            k_prime = torch.transpose(self.weights_k(k).view(k_dim[0], -1, self._num_heads, k_dim[-1]), 1, 2) #[task_size, num_heads, # of context point, q_latent_dim]
+            v_prime = torch.transpose(self.weights_v(v).view(v_dim[0], -1, self._num_heads, v_dim[-1]), 1, 2) #[task_size, num_heads, # of context point, q_latent_dim]
+        else:
+            q_prime = torch.transpose(self.weights_q(q).view(*q_dim[:-2], -1, self._num_heads, q_dim[-1]), -3, -2) #[task_size, num_heads, # of total point, q_latent_dim]
+            k_prime = torch.transpose(self.weights_k(k).view(*k_dim[:-2], -1, self._num_heads, k_dim[-1]), -3, -2) #[task_size, num_heads, # of context point, q_latent_dim]
+            v_prime = torch.transpose(self.weights_v(v).view(*v_dim[:-2], -1, self._num_heads, v_dim[-1]), -3, -2) #[task_size, num_heads, # of context point, q_latent_dim]
 
         # soft_attention_log_normal
         output, weights = self.soft_attention_weibull_2(q_prime, k_prime, v_prime, scale=scale, normalize=normalize,\
@@ -804,8 +827,8 @@ class Attention(nn.Module):
             k_weibull=k_weibull)
 
         # mean
-        output = output.mean(dim=1)
-        weights = weights.mean(dim=1)
+        output = output.mean(dim=-3)
+        weights = weights.mean(dim=-3)
 
         representation = output + representation 
         
