@@ -184,6 +184,26 @@ ANP_weibull_100:
   PLOT_AFTER: 11
   LEARNING_RATE: 1.0e-3
 
+ANP_dirichlet_1:
+    # Model
+  HIDDEN_SIZE: 128
+  NUM_LATENT: 128
+  DEBUG: True
+
+  # Attention type : multihead, soft_attention
+  ATTENTION_TYPE: 'soft_multihead_dirichlet'
+
+  # if soft_attention (Bayesian attention)
+    # option : contextual or else
+  PRIOR_TYPE : "contextual"
+  EPS: 1.0e-20
+  RSAMPLE_TRAINING: 1.0
+  BETA: 1
+    
+  # Set training parameters
+  PLOT_AFTER: 11
+  LEARNING_RATE: 1.0e-3
+
 
 ANP_log_normal_dot:
     # Model

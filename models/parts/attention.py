@@ -58,7 +58,8 @@ class Attention(nn.Module):
         # Multi-head Attention
         if self._att_type == 'multihead' or \
             self._att_type == 'soft_multihead_log_normal' or \
-            self._att_type == 'soft_multihead_weibull':
+            self._att_type == 'soft_multihead_weibull' or \
+            self._att_type == 'soft_multihead_dirichlet':
             
             # Define number of heads
             self._num_heads = kargs.get("num_heads", 8)
@@ -72,8 +73,9 @@ class Attention(nn.Module):
             self.weights_v = nn.Linear(dim['v_last_dim'], self._num_heads * dim['v_last_dim'])
 
         # Bayesian Attnetion Modules
-        if self._att_type.find("log_normal") >= 0 or \
-            self._att_type.find("weibull") >= 0 :
+        if (self._att_type.find("log_normal") >= 0) or \
+            (self._att_type.find("weibull") >= 0) or \
+            (self._att_type.find("dirichlet") >= 0):
             
             # prior type : contextual or else
             self.prior_type = kargs.get("prior_type", "contextual")
@@ -87,8 +89,12 @@ class Attention(nn.Module):
                     kargs.get("simga_normal_posterior", 1.0)
                 self.sigma_normal_prior = \
                     kargs.get("simga_normal_prior", 1.0)
-            else:
+            elif self._att_type.find("weibull") >= 0:
                 self.k_weibull = kargs.get("k_weibull", 30)
+            elif self._att_type.find("dirichlet") >= 0:
+                self.beta = kargs.get("beta", 1)
+            else:
+                NotImplementedError
 
             # parameters
             self.hid_size = kargs.get("hid_size", 10)
@@ -182,6 +188,9 @@ class Attention(nn.Module):
             representation, weights = self.soft_multihead_attention_weibull(q, k, v, self._scale, self._normalize, \
                 self.prior_type, self.eps, self.training,\
                 self.k_weibull)
+        elif self._att_type == 'soft_multihead_dirichlet':
+            representation, weights = self.soft_multihead_attention_dirichlet(q, k, v, self._scale, self._normalize, \
+                self.prior_type, self.eps, self.beta)
 
         else:
             raise NameError(("'att_type', not including ['uniform', 'laplace', 'dot_product', 'multihead', 'soft_attention']"))
@@ -560,6 +569,9 @@ class Attention(nn.Module):
     def soft_attention_log_normal_2(self, q, k, v, scale, normalize,\
         prior_type="contextual", eps=1e-20, training=1.0,\
         sigma_normal_posterior=1.0, sigma_normal_prior=1.0):
+        '''
+            refer to Bayesian Attention Modules
+        '''
 
         # Weights
         key = k
@@ -644,6 +656,9 @@ class Attention(nn.Module):
     def soft_attention_weibull_2(self, q, k, v, scale, normalize,\
         prior_type="contextual",eps=1e-20, training=1.0,\
         k_weibull=30):
+        '''
+            refer to Bayesian Attention Modules
+        '''
 
         # Weights
         key = k
@@ -706,6 +721,86 @@ class Attention(nn.Module):
             - 1.0 * lambda_weibull * np.exp(loggamma(1 + 1.0/k_weibull)) \
             + np.euler_gamma + 1.0 \
             + alpha_gamma * np.log(1.0 + eps) - torch.lgamma(alpha_gamma + eps))
+
+        mask = torch.where(KL > -1e7, torch.ones_like(KL), torch.zeros_like(KL))
+        KL = KL * mask
+        KL_backward = KL.sum() / mask.sum()
+
+        if self.coef_drop != 0.0:
+            self.coef_dropout(weights)
+        
+        if self.in_drop != 0.0:
+            self.in_dropout(k)
+
+        rep = torch.matmul(weights, v)
+
+        # add kl loss
+        self.kl_loss = KL_backward
+
+        return rep, weights
+
+    def soft_attention_dirichlet_2(self, q, k, v, scale, normalize,\
+        prior_type="contextual",eps=1e-20, beta=1.0):
+        '''
+            refer to Dirichlet VAE
+        '''
+
+        # Weights
+        key = k
+        
+        # Scale parameterd_k
+        d_k = q.size()[-1]
+        scale = math.sqrt(d_k)
+
+        # Transpose 
+            # [batch_size, x_size(dim), # of context_points]
+            # if multihead, #[task_size, num_heads, q_latent_dim , # of context point]
+        k = torch.transpose(k, -1, -2) 
+
+            # if multihead, #[task_size, num_heads, # of total point, # of context point]
+        unnorm_weights = torch.div(torch.matmul(q, k), scale)
+
+        if normalize:
+            weight_fn = F.softmax
+        else:
+            weight_fn = F.tanh
+
+        weights = weight_fn(unnorm_weights)  
+
+        # Prior from "key"
+        if prior_type == "contextual":
+            dot_gamma = F.relu(self.weights_k_1(torch.transpose(k,-1,-2))) # [batch_size, # of total_point, hidden]
+            dot_gamma = self.weights_k_2(dot_gamma) # [batch_size, # of total_point, 1]
+            dot_gamma = torch.transpose(dot_gamma, -1, -2) # [batch_size, 1, # of total_point]
+
+            prior_alpha = F.softmax(dot_gamma, dim=-1) # [batch_size, 1, # of total_points]
+            prior_weights = prior_alpha / prior_alpha.sum(dim=-1, keepdims=True) 
+
+        else:
+            prior_alpha = 1.0
+
+        # Posterior parameter of inverse gamma
+        posterior_alpha = weights + eps
+
+        # Posterior sampling and KL
+            # posterior shape
+        posterior_alpha_size = list(posterior_alpha.size())
+            
+        # probability value for sample by inverse Gamma CDF
+        uniform_prob = torch.rand(*posterior_alpha_size).to(self.device)
+
+        # rsamples by using inverse Gamma CDF
+        sample_gamma = (1/beta) * \
+            torch.pow(\
+            uniform_prob * posterior_alpha * torch.exp(torch.lgamma(posterior_alpha)),\
+            1/posterior_alpha)
+        
+        # satisfy the simplex constraint    
+        weights = sample_gamma / sample_gamma.sum(dim=-1, keepdim=True) #[batch_size, # of total_point, # of context_point]
+
+        # compute KLD
+        KL = torch.lgamma(prior_alpha) - torch.lgamma(posterior_alpha) \
+            + ((posterior_alpha - prior_alpha) * torch.digamma(posterior_alpha))
 
         mask = torch.where(KL > -1e7, torch.ones_like(KL), torch.zeros_like(KL))
         KL = KL * mask
@@ -825,6 +920,48 @@ class Attention(nn.Module):
         output, weights = self.soft_attention_weibull_2(q_prime, k_prime, v_prime, scale=scale, normalize=normalize,\
             prior_type=prior_type, eps=eps, training=training, \
             k_weibull=k_weibull)
+
+        # mean
+        output = output.mean(dim=-3)
+        weights = weights.mean(dim=-3)
+
+        representation = output + representation 
+        
+        #[batch_size, # of total_point, representation dim(latent_dim)] <= [batch_size, # of total_point, # of context_point, x_size(dim)] * [Batch_size, # of context_points, representation dim(latent_dim)]
+        return representation, weights
+
+    def soft_multihead_attention_dirichlet(self, q, k, v, scale, normalize,\
+        prior_type="contextual",eps=1e-20, beta=1.0):
+        # dim
+        ndim = q.dim()
+        
+        # Size
+        q_dim = q.size()
+        k_dim = k.size()
+        v_dim = v.size()
+
+        # Parameters
+        self.head_size
+
+        # Initialization of results
+        representation = 1.0
+        
+        # forward
+        '''
+            q_dim, k_dim, v_dim 정보들을 모두 수정하기 (정보가 없음)
+        '''
+        if ndim == 3:
+            q_prime = torch.transpose(self.weights_q(q).view(q_dim[0], -1, self._num_heads, q_dim[-1]), 1, 2) #[task_size, num_heads, # of total point, q_latent_dim]
+            k_prime = torch.transpose(self.weights_k(k).view(k_dim[0], -1, self._num_heads, k_dim[-1]), 1, 2) #[task_size, num_heads, # of context point, q_latent_dim]
+            v_prime = torch.transpose(self.weights_v(v).view(v_dim[0], -1, self._num_heads, v_dim[-1]), 1, 2) #[task_size, num_heads, # of context point, q_latent_dim]
+        else:
+            q_prime = torch.transpose(self.weights_q(q).view(*q_dim[:-2], -1, self._num_heads, q_dim[-1]), -3, -2) #[task_size, num_heads, # of total point, q_latent_dim]
+            k_prime = torch.transpose(self.weights_k(k).view(*k_dim[:-2], -1, self._num_heads, k_dim[-1]), -3, -2) #[task_size, num_heads, # of context point, q_latent_dim]
+            v_prime = torch.transpose(self.weights_v(v).view(*v_dim[:-2], -1, self._num_heads, v_dim[-1]), -3, -2) #[task_size, num_heads, # of context point, q_latent_dim]
+
+        # soft_attention_log_normal
+        output, weights = self.soft_attention_dirichlet_2(q_prime, k_prime, v_prime, scale=scale, normalize=normalize,\
+            prior_type=prior_type, eps=eps, beta=beta)
 
         # mean
         output = output.mean(dim=-3)

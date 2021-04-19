@@ -87,6 +87,12 @@ def set_model(model_name, config, device):
                 dim=DIM, att_type=config['ATTENTION_TYPE'], prior_type=config["PRIOR_TYPE"],\
                 eps=config['EPS'], training=config['RSAMPLE_TRAINING'],\
                 k_weibull=config['K_WEIBULL'])
+        elif model_name == "ANP_dirichlet" or model_name.find("ANP_dirichlet") >= 0:
+            # Dirichlet VAE
+            attention = \
+                Attention(device, embedding_type='mlp', layer_sizes=[config['HIDDEN_SIZE']]*2, \
+                dim=DIM, att_type=config['ATTENTION_TYPE'], prior_type=config["PRIOR_TYPE"],\
+                eps=config['EPS'], beta=config['BETA'])
         else:
             attention = None
 
